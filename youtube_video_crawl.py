@@ -5,15 +5,17 @@ import json
 import time
 import youtube_comment_crawl as ycc
 
-DEVELOPER_KEY = 'AIzaSyAIHs872FfLpSNNH57w_m6UoN3jn_xSS2Q'
-YOUTUBE_API_SERVICE_NAME = 'youtube'
-YOUTUBE_API_VERSION = 'v3'
+with open('youtube_key.json') as json_file:
+    API_INFO = json.load(json_file)
+    DEVELOPER_KEY = API_INFO['DEVELOPER_KEY']
+    YOUTUBE_API_SERVICE_NAME = API_INFO['YOUTUBE_API_SERVICE_NAME']
+    YOUTUBE_API_VERSION = API_INFO['YOUTUBE_API_VERSION']
 
 class get_videos:
     youtube = build(YOUTUBE_API_SERVICE_NAME, YOUTUBE_API_VERSION,developerKey=DEVELOPER_KEY)
     
-    def __init__(self, q, part, order, maxResults, maxPage, part_c, order_c, maxResults_c, maxPage_c):
-        self.q = q # 검색어
+    def __init__(self, query, part, order, maxResults, maxPage, part_c, order_c, maxResults_c, maxPage_c, publishedAfter, publishedBefore):
+        self.q = query # 검색어
         self.part = part # 어떤 원소를 표시?
         self.order = order # 정렬 순서. date, rating, relevance, title, videoCount, viewCount
         self.maxResults = maxResults # 한 페이지의 최대 결과는 몇 개까지 표시?
@@ -22,6 +24,8 @@ class get_videos:
         self.order_c = order_c # comment 정렬
         self.maxResults_c = maxResults_c # comment 최대결과
         self.maxPage_c = maxPage_c # comment 최대탐색페이지
+        self.publishedAfter = publishedAfter # 이 시점 이후로 업로드 됨
+        self.publishedBefore = publishedBefore # 이 시점 이전에 업로드 됨
         
     def save_json(self, data, filename):
         with open(filename+'.json', 'w') as outfile:
@@ -29,11 +33,13 @@ class get_videos:
 
     def crawl_videos(self, nextPageToken_pa=''):
         search_response = self.youtube.search().list(
-            q=self.q,
-            part=self.part, #'id,snippet'
-            order=self.order,
-            maxResults=self.maxResults,
-            pageToken=nextPageToken_pa # 다음 페이지 토큰.
+            q = self.q
+            ,part = self.part #'id,snippet'
+            ,order = self.order
+            ,maxResults = self.maxResults
+            ,pageToken = nextPageToken_pa # 다음 페이지 토큰.
+            ,publishedAfter = self.publishedAfter
+            ,publishedBefore = self.publishedBefore
         ).execute()
         
         ycc1 = ycc.get_commentThreads(self.part_c, self.order_c, self.maxResults_c, self.maxPage_c)
@@ -47,8 +53,8 @@ class get_videos:
                 video_dic['videoId'] = videoId
                 video_dic['channelId'] = each_video['snippet']['channelId']
                 video_dic['publishedAt'] = each_video['snippet']['publishedAt']
-                ycc1.commentThreads_list = [] # 클래스 인스턴스의 comment 정보 초기화 
                 video_dic['commentThreads'] = ycc1.get_main(videoId)
+                ycc1.commentThreads_list = [] # 클래스 인스턴스의 comment 정보 초기화 
                 self.save_json(video_dic,videoId)
         
         return search_response.get('nextPageToken')

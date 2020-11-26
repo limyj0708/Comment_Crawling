@@ -4,9 +4,11 @@ from googleapiclient.errors import HttpError
 import json
 import time
 
-DEVELOPER_KEY = 'AIzaSyAIHs872FfLpSNNH57w_m6UoN3jn_xSS2Q'
-YOUTUBE_API_SERVICE_NAME = 'youtube'
-YOUTUBE_API_VERSION = 'v3'
+with open('youtube_key.json') as json_file:
+    API_INFO = json.load(json_file)
+    DEVELOPER_KEY = API_INFO['DEVELOPER_KEY']
+    YOUTUBE_API_SERVICE_NAME = API_INFO['YOUTUBE_API_SERVICE_NAME']
+    YOUTUBE_API_VERSION = API_INFO['YOUTUBE_API_VERSION']
 
 class get_commentThreads:
     youtube = build(YOUTUBE_API_SERVICE_NAME, YOUTUBE_API_VERSION,developerKey=DEVELOPER_KEY)
@@ -24,14 +26,17 @@ class get_commentThreads:
             json.dump(data, outfile)
 
     def crawl_commentThreads(self, videoId_pa, nextPageToken_pa=''):
-        commentThreads_response = self.youtube.commentThreads().list(
-            part=self.part,
-            #'snippet,replies'
-            order=self.order,
-            videoId=videoId_pa, # 계속 바뀌어야 하기 때문에, 클래스 변수가 아니고 함수의 인자로 받음
-            maxResults=self.maxResults,
-            pageToken=nextPageToken_pa
-        ).execute()
+        try : 
+            commentThreads_response = self.youtube.commentThreads().list(
+                part=self.part,
+                #'snippet,replies'
+                order=self.order,
+                videoId=videoId_pa, # 계속 바뀌어야 하기 때문에, 클래스 변수가 아니고 함수의 인자로 받음
+                maxResults=self.maxResults,
+                pageToken=nextPageToken_pa
+            ).execute()
+        except :
+            return None
         
         idx = 0
         for commentsThreads in commentThreads_response.get('items', []):
@@ -55,7 +60,7 @@ class get_commentThreads:
     def get_main(self, videoId):
         loopNum = 0
         checkValue = ''
-        while (checkValue != None) and (loopNum < self.maxPage):
+        while (checkValue != None) and (loopNum < self.maxPage): #nextPageToken이 있나 검사
             checkValue = self.crawl_commentThreads(videoId, nextPageToken_pa=checkValue)
             loopNum += 1
             time.sleep(0.02)
