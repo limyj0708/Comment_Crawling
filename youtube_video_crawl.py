@@ -3,6 +3,10 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 import json
 import time
+import os.path
+import csv
+import re
+
 import youtube_comment_crawl as ycc
 
 with open('youtube_key.json') as json_file:
@@ -27,9 +31,30 @@ class get_videos:
         self.publishedAfter = publishedAfter # 이 시점 이후로 업로드 됨
         self.publishedBefore = publishedBefore # 이 시점 이전에 업로드 됨
         
+    def replace_html_charEntity(self, text):
+        text = re.sub('<[^<]+?>', '', text)
+        text = text.replace('&nbsp;', ' ')
+        text = text.replace('&quot;', ' ')
+        text = text.replace('&amp;', '&')
+        text = text.replace('&lt;', '<')
+        text = text.replace('&gt;', '>')
+        text = text.replace('&#39;', "'")
+        return text
+        
     def save_json(self, data, filename):
         with open(filename+'.json', 'w') as outfile:
             json.dump(data, outfile)
+            
+    def save_csv(self, write_list):
+        filename = self.q + '_' +self.publishedAfter.replace(':','') + '_' +self.publishedBefore.replace(':','') + '.csv'
+        file_exists = os.path.isfile(filename)
+        with open(filename, 'a', newline='', encoding='UTF-8') as csvfile:
+            writer = csv.writer(csvfile, delimiter='|')
+            if not file_exists:
+                headers = ['videoUrl', 'channelId', 'vidTitle', 'vidPublishedAt'
+                           ,'commmentText', 'commentPublishedAt', 'commentAuthor']
+                writer.writerow(headers)
+            writer.writerow(write_list)
 
     def crawl_videos(self, nextPageToken_pa=''):
         search_response = self.youtube.search().list(
@@ -55,10 +80,16 @@ class get_videos:
                 video_dic['publishedAt'] = each_video['snippet']['publishedAt']
                 video_dic['commentThreads'] = ycc1.get_main(videoId)
                 ycc1.commentThreads_list = [] # 클래스 인스턴스의 comment 정보 초기화 
-                self.save_json(video_dic,videoId)
-        
+                self.save_json(video_dic,video_dic['publishedAt'].replace(':', '') + '_' + videoId)
+                for each_comment in video_dic['commentThreads']:
+                    csv_write_list = ['https://www.youtube.com/watch?v='+video_dic['videoId'], video_dic['channelId'], self.replace_html_charEntity(video_dic['title']), video_dic['publishedAt']]
+                    csv_write_list.extend([self.replace_html_charEntity(each_comment['text']), each_comment['publishedAt'], each_comment['author']])
+                    self.save_csv(csv_write_list)
+                    for each_reply in each_comment['replies']:
+                        csv_write_list = ['https://www.youtube.com/watch?v='+video_dic['videoId'], video_dic['channelId'], self.replace_html_charEntity(video_dic['title']), video_dic['publishedAt']]
+                        csv_write_list.extend([self.replace_html_charEntity(each_reply['text']), each_reply['publishedAt'], each_reply['author']])
+                        self.save_csv(csv_write_list)
         return search_response.get('nextPageToken')
-    
     
     def get_main(self):
         loopNum = 0
